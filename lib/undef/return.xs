@@ -36,7 +36,7 @@ S_pp_leavesub_no_undef(pTHX)
     SV *returnsv = TOPs;
     /* no PL_main_start most likely means we are the main block of code */
     if ( PL_main_start && returnsv == &PL_sv_undef ) {
-        warn("Returning undef");
+        warn("Returning undef while 'no undef::return' is in effect!");
     }
     return PL_ppaddr[OP_LEAVESUB](aTHX);
 }
@@ -47,7 +47,7 @@ S_pp_return_no_undef(pTHX)
     dSP;
     SV *returnsv = TOPs;
     if ( returnsv == &PL_sv_undef ) {
-        warn("Returning undef (return)");
+        warn("Returning undef while 'no undef::return' is in effect!");
     }
     return PL_ppaddr[OP_RETURN](aTHX);
 }
