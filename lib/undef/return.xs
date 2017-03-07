@@ -29,6 +29,8 @@ THX_in_no_undef_return(pTHX)
     return ent && SvTRUE(HeVAL(ent));
 }
 
+#define warn_for_undef_return() warn("Returning undef while 'no undef::return' is in effect!")
+
 STATIC OP*
 S_pp_leavesub_no_undef(pTHX)
 {
@@ -36,7 +38,7 @@ S_pp_leavesub_no_undef(pTHX)
     SV *returnsv = TOPs;
     /* no PL_main_start most likely means we are the main block of code */
     if ( PL_main_start && returnsv == &PL_sv_undef ) {
-        warn("Returning undef while 'no undef::return' is in effect!");
+        warn_for_undef_return();
     }
     return PL_ppaddr[OP_LEAVESUB](aTHX);
 }
@@ -46,9 +48,31 @@ S_pp_return_no_undef(pTHX)
 {
     dSP;
     SV *returnsv = TOPs;
-    if ( returnsv == &PL_sv_undef ) {
-        warn("Returning undef while 'no undef::return' is in effect!");
+    PERL_SI *si;
+    if ( returnsv != &PL_sv_undef ) /* common case: returning a non-undef */
+        return PL_ppaddr[OP_RETURN](aTHX);
+
+    /* check that this return will get out of a sub */
+    for (si = PL_curstackinfo; si; si = si->si_prev) {
+        I32 ix;
+        for (ix = si->si_cxix; ix >= 0; ix--) {
+            const PERL_CONTEXT *cx = &(si->si_cxstack[ix]);
+            if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
+                warn_for_undef_return();
+                return PL_ppaddr[OP_RETURN](aTHX);
+            }
+            else if (CxTYPE(cx) == CXt_EVAL) {
+                /* eval { return undef } or eval "return undef", so do
+                 * not warn about it!
+                 */
+                return PL_ppaddr[OP_RETURN](aTHX);
+            }
+        }
     }
+    /* No clue how we ever get to this; maybe during global
+     * destruction, if PL_curstackinfo is empty?
+     */
+    warn_for_undef_return();
     return PL_ppaddr[OP_RETURN](aTHX);
 }
 
